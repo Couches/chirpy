@@ -4,57 +4,88 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 )
 
-type DatabaseStructure[T any] struct {
-  Contents map[int]T
+type Chirp struct {
+	Id          int    `json:"id"`
+	Valid       bool   `json:"valid"`
+	CleanedBody string `json:"cleaned_body"`
 }
 
-type Database[T any] struct {
-  Path string
+type Database struct {
+	path string
+	mux  *sync.RWMutex
 }
 
-func CreateDatabase[T any](path string) *Database[T] {
-  fmt.Println("New database created successfully")
-  return &Database[T]{}
+type DBStructure struct {
+  Chirps map[int]Chirp `json:"chirps"`
 }
 
-func (db *Database[T]) Write(id int, data T) {
-  fmt.Println("attempting to write data:")
-  fmt.Println(data)
-  dbs := db.ReadAll()
-  file, err := os.Create(db.Path)
+func NewDatabase(path string) (*Database, error) {
+  db := &Database{}
+  file, err := os.Create(path)
   if err != nil {
-    fmt.Printf("There was an issue writing to the database")
-    return
+    fmt.Println("Failed to create file \"%v\": %v", path, err)
+    return db, err
   }
 
-  dbs.Contents[id] = data
+  defer file.Close()
 
-  write_content, err := json.Marshal(dbs.Contents)
-  if err != nil {
-    fmt.Printf("There was an issue writing to the database")
-    return
+  db = &Database{
+    path: path,
+    mux: &sync.RWMutex{},
   }
 
-  fmt.Println(write_content)
-  file.Write(write_content)
+  return db, nil
 }
 
-func (db *Database[T]) ReadAll() DatabaseStructure[T] {
-  file, err := os.ReadFile(db.Path)
+func (db *Database) CreateChirp(body string) (Chirp, error) {
+  chirp := Chirp{}
+  err := json.Unmarshal([]byte(body), &chirp)
   if err != nil {
-    fmt.Printf("There was an issue reading the file: %v\n", db.Path)
-    return DatabaseStructure[T]{}
+    fmt.Printf("Failed to deserialize Chirp\n")
+    return chirp, err
   }
 
-  contents := DatabaseStructure[T]{}
-  err = json.Unmarshal(file, &contents)
-  if err != nil {
-    fmt.Printf("There was an issue decoding the database\n")
-    return DatabaseStructure[T]{}
-  }
-
-  return contents
+  return chirp, nil
 }
 
+func (db *Database) GetChirps() ([]Chirp, error) {
+  dbs, err := db.loadDB()
+
+  if err != nil {
+    fmt.Printf("Failed to load database\n")
+    return nil, err
+  }
+
+  chirps := make([]Chirp, 0, len(dbs.Chirps))
+  for _, chirp := range dbs.Chirps {
+    chirps = append(chirps, chirp)
+  }
+
+  return chirps, err
+}
+
+func (db *Database) loadDB() (DBStructure, error) {
+  dbs := DBStructure{}
+  file, err := os.ReadFile(db.path)
+  if err != nil {
+    fmt.Printf("Failed to read file \"%v\"\n", db.path)
+    return dbs, err
+  }
+
+  err = json.Unmarshal(file, &dbs)
+
+  if err != nil {
+    fmt.Printf("Failed to deserialize JSON from file \"%v\"\n", db.path)
+    return dbs, err
+  }
+
+  fmt.Println(dbs.Chirps)
+  return dbs, nil
+}
+
+func (db *Database) writeDB(dbs DBStructure) error {
+
+}

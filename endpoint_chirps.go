@@ -10,7 +10,7 @@ type chirpRequest struct {
 	Body string `json:"body"`
 }
 
-type chirp struct {
+type Chirp struct {
 	Id          int    `json:"id"`
 	Valid       bool   `json:"valid"`
 	CleanedBody string `json:"cleaned_body"`
@@ -33,7 +33,7 @@ func chirpsEndpoint(w http.ResponseWriter, request *http.Request, config apiConf
 
 	contents := config.Database.ReadAll().Contents
 
-	payload := chirp{
+	payload := Chirp{
 		Id:          len(contents) + 1,
 		Valid:       true,
 		CleanedBody: cleanMessage(req.Body),
