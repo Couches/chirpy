@@ -2,46 +2,61 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"strings"
+	"strconv"
+
+	ChirpDatabase "github.com/Couches/chirp-database"
 )
 
-type chirpRequest struct {
-	Body string `json:"body"`
-}
-
-type Chirp struct {
-	Id          int    `json:"id"`
-	Valid       bool   `json:"valid"`
-	CleanedBody string `json:"cleaned_body"`
-}
-
-func chirpsEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
+func chirpsPostEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
 	decoder := json.NewDecoder(request.Body)
-	req := chirpRequest{}
+	req := ChirpDatabase.ChirpRequest{}
 	err := decoder.Decode(&req)
 
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong while decoding request")
 		return
 	}
 
-	if len(req.Body) > 140 {
-		respondWithError(w, http.StatusBadRequest, "Chirp is too long")
-		return
-	}
+  chirp, error := config.Database.CreateChirp(req)
+  if error.Err != nil {
+    fmt.Print(error.Msg, error.Code)
+    respondWithError(w, error.Code, error.Msg)
+    return
+  }
 
-	contents := config.Database.ReadAll().Contents
+	respondWithJSON(w, http.StatusCreated, chirp)
+}
 
-	payload := Chirp{
-		Id:          len(contents) + 1,
-		Valid:       true,
-		CleanedBody: cleanMessage(req.Body),
-	}
+func chirpsGetEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
+  chirpID, err := strconv.Atoi(request.PathValue("chirpID"))
+  if err != nil {
+    respondWithError(w, http.StatusBadRequest, "Invalid input")
+    return
+  }
 
-  config.Database.Write(payload.Id, payload)
+  chirp, error := config.Database.GetChirp(chirpID)
 
-	respondWithJSON(w, http.StatusOK, payload)
+  if error.Err != nil {
+    fmt.Println(error.Msg, error.Code)
+    respondWithError(w, error.Code, error.Msg)
+    return
+  }
+
+  respondWithJSON(w, http.StatusOK, chirp)
+}
+
+func chirpsGetAllEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
+  chirps, error := config.Database.GetChirps()
+
+  if error.Err != nil {
+    fmt.Println(error.Msg, error.Code)
+    respondWithError(w, error.Code, error.Msg)
+    return
+  }
+
+  respondWithJSON(w, http.StatusOK, chirps)
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -55,25 +70,10 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
+  
 
 	w.Header().Add("Content-Type", "text/json; charset=utf-8")
 	w.WriteHeader(code)
 	w.Write(res)
 }
 
-func cleanMessage(body string) string {
-	filteredWords := map[string]bool{
-		"kerfuffle": true,
-		"sharbert":  true,
-		"fornax":    true,
-	}
-
-	arr := strings.Fields(body)
-	for i, word := range arr {
-		if _, ok := filteredWords[strings.ToLower(word)]; ok {
-			arr[i] = "****"
-		}
-	}
-
-	return strings.Join(arr, " ")
-}

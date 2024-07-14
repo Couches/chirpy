@@ -7,16 +7,21 @@ import (
 	ChirpDatabase "github.com/Couches/chirp-database"
 )
 
-var config apiConfig = apiConfig{
-	Database: *ChirpDatabase.CreateDatabase[chirp]("database.json"),
-}
+var config apiConfig = apiConfig{}
 
 func main() {
+  database, err := ChirpDatabase.NewDatabase("database.json")
+  if err != nil {
+    fmt.Printf("Failed to create database.json\n")
+    return
+  }
+
+  config.Database = *database
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", config.middlewareMetrics(http.StripPrefix("/app/", http.FileServer(http.Dir("./app")))))
 
 	for _, endpoint := range getEndpoints() {
-		serverMux.HandleFunc(fmt.Sprintf("%v%v", endpoint.namespace, endpoint.route), methodHandler(endpoint, endpoint.callback, config))
+		serverMux.HandleFunc(fmt.Sprintf("%v %v%v", endpoint.method, endpoint.namespace, endpoint.route), methodHandler(endpoint, endpoint.callback, config))
 	}
 
 	server := http.Server{
@@ -28,7 +33,7 @@ func main() {
 
 type apiConfig struct {
 	pageVisits int
-	Database   ChirpDatabase.Database[chirp]
+	Database   ChirpDatabase.Database
 }
 
 type httpEndpoint struct {
@@ -62,8 +67,20 @@ func getEndpoints() []httpEndpoint {
 			method:    "POST",
 			namespace: "/api",
 			route:     "/chirps",
-			callback:  chirpsEndpoint,
+			callback:  chirpsPostEndpoint,
 		},
+    {
+      method: "GET",
+      namespace: "/api",
+      route: "/chirps/{chirpID}",
+      callback: chirpsGetEndpoint,
+    },
+    {
+      method: "GET",
+      namespace: "/api",
+      route: "/chirps",
+      callback: chirpsGetAllEndpoint,
+    },
 	}
 }
 
