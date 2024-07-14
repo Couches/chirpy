@@ -1,4 +1,4 @@
-package ChirpDatabase
+package ChirpyDatabase
 
 import (
 	"encoding/json"
@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 )
+
+type ChirpDBStructure struct {
+	Data map[int]Chirp `json:"data"`
+}
 
 type Chirp struct {
 	Id    int    `json:"id"`
@@ -16,41 +19,16 @@ type Chirp struct {
 	Body  string `json:"body"`
 }
 
-type Database struct {
-	path string
-	mux  *sync.RWMutex
-}
-
-type DBStructure struct {
-	Chirps map[int]Chirp `json:"chirps"`
-}
-
 type ChirpRequest struct {
 	Body string `json:"body"`
 }
 
-type CustomError struct {
-	Err  error
-	Code int
-	Msg  string
+func (c Chirp) GetID() int {
+	return c.Id
 }
 
-func NewDatabase(path string) (*Database, error) {
-	db := &Database{}
-	file, err := os.Create(path)
-	if err != nil {
-		fmt.Println("Failed to create file \"%v\": %v", path, err)
-		return db, err
-	}
-
-	defer file.Close()
-
-	db = &Database{
-		path: path,
-		mux:  &sync.RWMutex{},
-	}
-
-	return db, nil
+func (c Chirp) IsValid() bool {
+	return c.Valid
 }
 
 func (db *Database) CreateChirp(req ChirpRequest) (Chirp, CustomError) {
@@ -69,18 +47,18 @@ func (db *Database) CreateChirp(req ChirpRequest) (Chirp, CustomError) {
 	db.mux.Lock()
 	defer db.mux.Unlock()
 
-	dbs, err := db.loadDB()
+	dbs, err := db.loadChirpDB()
 	if err != nil {
 		fmt.Printf("Failed to load database: %v\n", err)
 	}
 
 	chirp = Chirp{
-		Body: cleanMessage(req.Body),
-		Id:          len(dbs.Chirps) + 1,
-		Valid:       true,
+		Body:  cleanMessage(req.Body),
+		Id:    len(dbs.Data) + 1,
+		Valid: true,
 	}
 
-	dbs.Chirps[chirp.Id] = chirp
+	dbs.Data[chirp.Id] = chirp
 
 	err = db.writeDB(dbs)
 	if err != nil {
@@ -97,7 +75,7 @@ func (db *Database) CreateChirp(req ChirpRequest) (Chirp, CustomError) {
 }
 
 func (db *Database) GetChirps() ([]Chirp, CustomError) {
-	dbs, err := db.loadDB()
+	dbs, err := db.loadChirpDB()
 
 	if err != nil {
 		msg := "Failed to load database"
@@ -106,16 +84,16 @@ func (db *Database) GetChirps() ([]Chirp, CustomError) {
 		return nil, getError(msg, http.StatusInternalServerError, err)
 	}
 
-	chirps := make([]Chirp, 0, len(dbs.Chirps))
-	for _, chirp := range dbs.Chirps {
-		chirps = append(chirps, chirp)
+	chirps := make([]Chirp, 0, len(dbs.Data))
+	for _, chirp := range dbs.Data {
+    chirps = append(chirps, chirp)
 	}
 
 	return chirps, CustomError{}
 }
 
 func (db *Database) GetChirp(chirpID int) (Chirp, CustomError) {
-  dbs, err := db.loadDB()
+	dbs, err := db.loadChirpDB()
 
 	if err != nil {
 		msg := "Failed to load database"
@@ -124,18 +102,18 @@ func (db *Database) GetChirp(chirpID int) (Chirp, CustomError) {
 		return Chirp{}, getError(msg, http.StatusInternalServerError, err)
 	}
 
-  chirp, ok := dbs.Chirps[chirpID]
-  if !ok {
-    msg := fmt.Sprintf("Chirp with chirpID \"%v\" not found in database", chirpID)
-    return Chirp{}, getError(msg, http.StatusNotFound, errors.New(msg))
-  }
+	chirp, ok := dbs.Data[chirpID]
+	if !ok {
+		msg := fmt.Sprintf("Chirp with chirpID \"%v\" not found in database", chirpID)
+		return Chirp{}, getError(msg, http.StatusNotFound, errors.New(msg))
+	}
 
-  return chirp, CustomError{}
+	return chirp, CustomError{}
 }
 
-func (db *Database) loadDB() (DBStructure, error) {
-	dbs := DBStructure{
-		Chirps: map[int]Chirp{},
+func (db *Database) loadChirpDB() (DBStructure[Chirp], error) {
+	dbs := DBStructure[Chirp]{
+		Data: map[int]Chirp{},
 	}
 	file, err := os.ReadFile(db.path)
 	if err != nil {
@@ -147,36 +125,11 @@ func (db *Database) loadDB() (DBStructure, error) {
 	err = json.Unmarshal(file, &dbs)
 
 	if err != nil {
-		fmt.Printf("Failed to deserialize JSON from file \"%v\"\n", db.path)
+		fmt.Printf("Failed to deserialize JSON from file \"%v\" with err %v\n", db.path, err)
 		return dbs, err
 	}
 
 	return dbs, nil
-}
-
-func (db *Database) writeDB(dbs DBStructure) error {
-	file, err := os.Create(db.path)
-	defer file.Close()
-
-	if err != nil {
-		fmt.Printf("Failed to create or truncate file \"%v\"\n", db.path)
-		return err
-	}
-
-	body, err := json.Marshal(dbs)
-	if err != nil {
-		fmt.Printf("Failed to serialize Chirps to JSON for writing\n")
-		return err
-	}
-
-	written, err := file.Write(body)
-	if err != nil {
-		fmt.Printf("Failed to write to file \"%v\"\n", db.path)
-		return err
-	}
-
-	fmt.Printf("Successfully wrote %v bytes to file \"%v\"\n", written, db.path)
-	return nil
 }
 
 func cleanMessage(body string) string {
@@ -194,12 +147,4 @@ func cleanMessage(body string) string {
 	}
 
 	return strings.Join(arr, " ")
-}
-
-func getError(msg string, code int, err error) CustomError {
-	return CustomError{
-		Msg:  msg,
-		Code: code,
-		Err:  err,
-	}
 }

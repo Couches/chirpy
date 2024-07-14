@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"net/http"
 
-	ChirpDatabase "github.com/Couches/chirp-database"
+	ChirpyDatabase "github.com/Couches/chirpy-database"
 )
 
 var config apiConfig = apiConfig{}
 
 func main() {
-  database, err := ChirpDatabase.NewDatabase("database.json")
-  if err != nil {
-    fmt.Printf("Failed to create database.json\n")
-    return
-  }
+	chirpDatabse, err := ChirpyDatabase.NewDatabase("chirp_database.json")
+	if err != nil {
+		fmt.Printf("Failed to create database.json\n")
+		return
+	}
 
-  config.Database = *database
+	userDatabase, err := ChirpyDatabase.NewDatabase("user_database.json")
+
+	config.ChirpDatabase = *chirpDatabse
+	config.UserDatabase = *userDatabase
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", config.middlewareMetrics(http.StripPrefix("/app/", http.FileServer(http.Dir("./app")))))
 
@@ -32,8 +35,9 @@ func main() {
 }
 
 type apiConfig struct {
-	pageVisits int
-	Database   ChirpDatabase.Database
+	pageVisits    int
+	ChirpDatabase ChirpyDatabase.Database
+	UserDatabase  ChirpyDatabase.Database
 }
 
 type httpEndpoint struct {
@@ -63,24 +67,44 @@ func getEndpoints() []httpEndpoint {
 			route:     "/reset",
 			callback:  resetEndpoint,
 		},
+		// Chirps endpoints
 		{
 			method:    "POST",
 			namespace: "/api",
 			route:     "/chirps",
-			callback:  chirpsPostEndpoint,
+			callback:  chirpsCreateEndpoint,
 		},
-    {
-      method: "GET",
-      namespace: "/api",
-      route: "/chirps/{chirpID}",
-      callback: chirpsGetEndpoint,
-    },
-    {
-      method: "GET",
-      namespace: "/api",
-      route: "/chirps",
-      callback: chirpsGetAllEndpoint,
-    },
+		{
+			method:    "GET",
+			namespace: "/api",
+			route:     "/chirps/{chirpID}",
+			callback:  chirpsGetEndpoint,
+		},
+		{
+			method:    "GET",
+			namespace: "/api",
+			route:     "/chirps",
+			callback:  chirpsGetAllEndpoint,
+		},
+		// Users endpoints
+		{
+			method:    "POST",
+			namespace: "/api",
+			route:     "/users",
+			callback:  usersCreateEndpoint,
+		},
+		{
+			method:    "GET",
+			namespace: "/api",
+			route:     "/users/{userID}",
+			callback:  usersGetEndpoint,
+		},
+		{
+			method:    "GET",
+			namespace: "/api",
+			route:     "/users",
+			callback:  usersGetAllEndpoint,
+		},
 	}
 }
 

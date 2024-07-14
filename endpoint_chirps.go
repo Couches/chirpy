@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"strconv"
 
-	ChirpDatabase "github.com/Couches/chirp-database"
+	ChirpyDatabase "github.com/Couches/chirpy-database"
 )
 
-func chirpsPostEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
+func chirpsCreateEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
 	decoder := json.NewDecoder(request.Body)
-	req := ChirpDatabase.ChirpRequest{}
+	req := ChirpyDatabase.ChirpRequest{}
 	err := decoder.Decode(&req)
 
 	if err != nil {
@@ -19,7 +19,7 @@ func chirpsPostEndpoint(w http.ResponseWriter, request *http.Request, config api
 		return
 	}
 
-  chirp, error := config.Database.CreateChirp(req)
+  chirp, error := config.ChirpDatabase.CreateChirp(req)
   if error.Err != nil {
     fmt.Print(error.Msg, error.Code)
     respondWithError(w, error.Code, error.Msg)
@@ -36,7 +36,7 @@ func chirpsGetEndpoint(w http.ResponseWriter, request *http.Request, config apiC
     return
   }
 
-  chirp, error := config.Database.GetChirp(chirpID)
+  chirp, error := config.ChirpDatabase.GetChirp(chirpID)
 
   if error.Err != nil {
     fmt.Println(error.Msg, error.Code)
@@ -48,7 +48,7 @@ func chirpsGetEndpoint(w http.ResponseWriter, request *http.Request, config apiC
 }
 
 func chirpsGetAllEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-  chirps, error := config.Database.GetChirps()
+  chirps, error := config.ChirpDatabase.GetChirps()
 
   if error.Err != nil {
     fmt.Println(error.Msg, error.Code)
