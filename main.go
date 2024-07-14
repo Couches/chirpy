@@ -105,6 +105,12 @@ func getEndpoints() []httpEndpoint {
 			route:     "/users",
 			callback:  usersGetAllEndpoint,
 		},
+		{
+			method:    "POST",
+			namespace: "/api",
+			route:     "/login",
+			callback:  usersLoginEndpoint,
+		},
 	}
 }
 

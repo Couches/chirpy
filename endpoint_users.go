@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	ChirpyDatabase "github.com/Couches/chirpy-database"
+  "golang.org/x/crypto/bcrypt"
 )
 
 func usersCreateEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
@@ -21,7 +22,7 @@ func usersCreateEndpoint(w http.ResponseWriter, request *http.Request, config ap
 
   chirp, error := config.UserDatabase.CreateUser(req)
   if error.Err != nil {
-    fmt.Print(error.Msg, error.Code)
+    fmt.Println(error.Msg, error.Code)
     respondWithError(w, error.Code, error.Msg)
     return
   }
@@ -36,19 +37,19 @@ func usersGetEndpoint(w http.ResponseWriter, request *http.Request, config apiCo
     return
   }
 
-  chirp, error := config.UserDatabase.GetUser(userID)
+  user, error := config.UserDatabase.GetUser(userID)
 
   if error.Err != nil {
     fmt.Println(error.Msg, error.Code)
     respondWithError(w, error.Code, error.Msg)
     return
   }
-
-  respondWithJSON(w, http.StatusOK, chirp)
+ 
+  respondWithJSON(w, http.StatusOK, user)
 }
 
 func usersGetAllEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-  chirps, error := config.UserDatabase.GetUsers()
+  users, error := config.UserDatabase.GetUsers()
 
   if error.Err != nil {
     fmt.Println(error.Msg, error.Code)
@@ -56,5 +57,31 @@ func usersGetAllEndpoint(w http.ResponseWriter, request *http.Request, config ap
     return
   }
 
-  respondWithJSON(w, http.StatusOK, chirps)
+  respondWithJSON(w, http.StatusOK, users)
+}
+
+func usersLoginEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
+  decoder := json.NewDecoder(request.Body)
+  req := ChirpyDatabase.UserRequest{}
+  err := decoder.Decode(&req)
+
+  if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong while decoding request")
+		return
+  }
+
+  user, error := config.UserDatabase.GetUserByEmail(req.Email)
+
+  if error.Err != nil {
+    respondWithError(w, error.Code, error.Msg)
+    return
+  }
+
+  err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+  if err != nil {
+    respondWithError(w, http.StatusUnauthorized, "Incorrect user password")
+    return
+  }
+
+  respondWithJSON(w, http.StatusOK, user.ToUserResponse())
 }
