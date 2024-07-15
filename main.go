@@ -3,23 +3,19 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	ChirpyDatabase "github.com/Couches/chirpy-database"
+  "github.com/joho/godotenv"  
 )
 
 var config apiConfig = apiConfig{}
 
 func main() {
-	chirpDatabse, err := ChirpyDatabase.NewDatabase("chirp_database.json")
-	if err != nil {
-		fmt.Printf("Failed to create database.json\n")
-		return
-	}
-
-	userDatabase, err := ChirpyDatabase.NewDatabase("user_database.json")
-
-	config.ChirpDatabase = *chirpDatabse
-	config.UserDatabase = *userDatabase
+  godotenv.Load()
+  config.jwtSecret = os.Getenv("JWT_SECRET")
+  
+  createDatabases()
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", config.middlewareMetrics(http.StripPrefix("/app/", http.FileServer(http.Dir("./app")))))
 
@@ -38,6 +34,7 @@ type apiConfig struct {
 	pageVisits    int
 	ChirpDatabase ChirpyDatabase.Database
 	UserDatabase  ChirpyDatabase.Database
+	jwtSecret     string
 }
 
 type httpEndpoint struct {
@@ -105,11 +102,12 @@ func getEndpoints() []httpEndpoint {
 			route:     "/users",
 			callback:  usersGetAllEndpoint,
 		},
+		// Login endpoints
 		{
 			method:    "POST",
 			namespace: "/api",
 			route:     "/login",
-			callback:  usersLoginEndpoint,
+			callback:  loginEndpoint,
 		},
 	}
 }
@@ -135,4 +133,21 @@ func (config *apiConfig) middlewareMetrics(next http.Handler) http.Handler {
 
 func (config *apiConfig) resetVisits() {
 	config.pageVisits = 0
+}
+
+func createDatabases() {
+	chirpDatabse, err := ChirpyDatabase.NewDatabase("chirp_database.json")
+	if err != nil {
+		fmt.Printf("Failed to create Chirp database\n")
+		return
+	}
+
+	userDatabase, err := ChirpyDatabase.NewDatabase("user_database.json")
+	if err != nil {
+		fmt.Printf("Failed to create User database\n")
+		return
+	}
+
+	config.ChirpDatabase = *chirpDatabse
+	config.UserDatabase = *userDatabase
 }
