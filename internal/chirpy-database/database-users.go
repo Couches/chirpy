@@ -9,13 +9,6 @@ import (
   "golang.org/x/crypto/bcrypt"
 )
 
-type User struct {
-	Id       int    `json:"id"`
-	Valid    bool   `json:"valid"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
 type UserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -49,7 +42,7 @@ func (u User) ToUserResponse() UserResponse {
   }
 }
 
-func (db *Database) CreateUser(req UserRequest) (UserResponse, CustomError) {
+func (db *Database) CreateUserOld(req UserRequest) (UserResponse, CustomError) {
 	user := User{}
 
 	dbs, err := db.loadUserDB()
@@ -163,7 +156,7 @@ func (db *Database) GetUsers() ([]User, CustomError) {
 	return users, CustomError{}
 }
 
-func (db *Database) GetUser(userID int) (UserResponse, CustomError) {
+func (db *Database) GetUserOld(userID int) (UserResponse, CustomError) {
 	dbs, err := db.loadUserDB()
 
 	if err != nil {
@@ -182,7 +175,7 @@ func (db *Database) GetUser(userID int) (UserResponse, CustomError) {
 	return user.ToUserResponse(), CustomError{}
 }
 
-func (db *Database) GetUserByEmail(email string) (User, CustomError) {
+func (db *Database) GetUserByEmailOld(email string) (User, CustomError) {
   users, error := db.GetUsers()
   if error.Err != nil {
     return User{}, error
