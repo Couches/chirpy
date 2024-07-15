@@ -48,9 +48,6 @@ func (db *Database) CreateChirp(req ChirpRequest) (Chirp, CustomError) {
 	defer db.mux.Unlock()
 
 	dbs, err := db.loadChirpDB()
-	if err != nil {
-		fmt.Printf("Failed to load database: %v\n", err)
-	}
 
 	chirp = Chirp{
 		Body:  cleanMessage(req.Body),

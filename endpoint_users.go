@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	ChirpyDatabase "github.com/Couches/chirpy-database"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func usersCreateEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
@@ -59,3 +61,51 @@ func usersGetAllEndpoint(w http.ResponseWriter, request *http.Request, config ap
   respondWithJSON(w, http.StatusOK, users)
 }
 
+func usersUpdateEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
+  header := request.Header.Get("Authorization")
+  headers := strings.Fields(header)
+  tokenString := headers[1]
+  
+	decoder := json.NewDecoder(request.Body)
+	req := ChirpyDatabase.UserRequest{}
+	err := decoder.Decode(&req)
+
+  claims := jwt.RegisteredClaims{}
+  token, err := jwt.ParseWithClaims(
+    tokenString,
+    &claims,
+    func(token *jwt.Token) (interface{}, error) { return []byte(config.jwtSecret), nil},
+    )
+
+  if err != nil {
+    respondWithError(w, http.StatusUnauthorized, err.Error())
+    return
+  }
+
+  if !token.Valid {
+    respondWithError(w, http.StatusUnauthorized, err.Error())
+    return
+  }
+
+  userID, _ := strconv.Atoi(claims.Subject)
+
+  userRequest := ChirpyDatabase.UpdateUserRequest {
+    Id: userID,
+    Email: req.Email,
+    Password: req.Password,
+  }
+
+  error := config.UserDatabase.UpdateUser(userRequest)
+  if error.Err != nil {
+    fmt.Println(error.Err)
+    respondWithError(w, error.Code, error.Msg)
+    return
+  }
+
+  res := ChirpyDatabase.UserResponse {
+    Id: userID,
+    Email: req.Email,
+  }
+
+  respondWithJSON(w, http.StatusOK, res)
+}

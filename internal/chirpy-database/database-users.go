@@ -21,6 +21,12 @@ type UserRequest struct {
 	Password string `json:"password"`
 }
 
+type UpdateUserRequest struct {
+	Id       int    `json:"id"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 type UserResponse struct {
 	Id       int    `json:"id"`
 	Valid    bool   `json:"valid"`
@@ -45,9 +51,6 @@ func (u User) ToUserResponse() UserResponse {
 
 func (db *Database) CreateUser(req UserRequest) (UserResponse, CustomError) {
 	user := User{}
-
-	db.mux.Lock()
-	defer db.mux.Unlock()
 
 	dbs, err := db.loadUserDB()
 	if err != nil {
@@ -98,6 +101,48 @@ func (db *Database) CreateUser(req UserRequest) (UserResponse, CustomError) {
 	}
 
 	return user.ToUserResponse(), CustomError{}
+}
+
+func (db *Database) UpdateUser(req UpdateUserRequest) CustomError {
+  db.mux.Lock()
+  defer db.mux.Unlock()
+
+  dbs, err := db.loadUserDB()
+  
+	if err != nil {
+		msg := "Failed to load database"
+
+		return getError(msg, http.StatusInternalServerError, err)
+	}
+
+  user, error := db.GetUser(req.Id)
+  if error.Err != nil {
+    return error
+  }
+
+  pass, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
+  if err != nil {
+    msg := "Could not hash user password"
+    error := CustomError {
+      Err: errors.New(msg),
+      Code: http.StatusInternalServerError,
+      Msg: msg,
+    }
+    return error 
+  } 
+
+  dbs.Data[user.Id] = User{
+    Email: req.Email,
+    Password: string(pass),
+    Id: user.Id,
+  }
+
+  err = db.writeDB(dbs)
+  if err != nil {
+    return getError(err.Error(), http.StatusInternalServerError, err)
+  }
+
+  return CustomError{}
 }
 
 func (db *Database) GetUsers() ([]User, CustomError) {
@@ -164,7 +209,6 @@ func (db *Database) loadUserDB() (DBStructure[User], error) {
 		return dbs, err
 	}
 
-	fmt.Println(string(file))
 	err = json.Unmarshal(file, &dbs)
 
 	if err != nil {
@@ -174,3 +218,4 @@ func (db *Database) loadUserDB() (DBStructure[User], error) {
 
 	return dbs, nil
 }
+

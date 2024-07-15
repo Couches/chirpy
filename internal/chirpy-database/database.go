@@ -46,6 +46,7 @@ func NewDatabase(path string) (*Database, error) {
 }
 
 func (db *Database) writeDB(dbs any) error {
+  fmt.Println(dbs)
 	file, err := os.Create(db.path)
 	defer file.Close()
 
