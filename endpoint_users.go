@@ -1,111 +1,137 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	Auth "github.com/Couches/auth"
 	ChirpyDatabase "github.com/Couches/chirpy-database"
-	"github.com/golang-jwt/jwt/v5"
 )
 
-func usersCreateEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-	decoder := json.NewDecoder(request.Body)
-	req := ChirpyDatabase.UserRequest{}
-	err := decoder.Decode(&req)
+func endpointCreateUser(w http.ResponseWriter, r *http.Request, config apiConfig) {
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
 
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong while decoding request")
+	result := decodeRequestBody(r, &parameters{})
+	if result.Error != nil {
+		respondWithError(w, result)
 		return
 	}
 
-  chirp, error := config.UserDatabase.CreateUser(req)
-  if error.Err != nil {
-    fmt.Println(error.Msg, error.Code)
-    respondWithError(w, error.Code, error.Msg)
-    return
-  }
+	req := (*result.Body).(*parameters)
 
-	respondWithJSON(w, http.StatusCreated, chirp)
+	result = Auth.HashPassword(req.Password)
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
+
+	hashedPassword := (*result.Body).(string)
+
+	result = config.Database.CreateUser(req.Email, hashedPassword)
+
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
+
+	user := (*result.Body).(ChirpyDatabase.User)
+
+	createResponse := struct {
+		Id    int    `json:"id"`
+		Email string `json:"email"`
+	}{
+		Id:    user.Id,
+		Email: user.Email,
+	}
+
+	result = ChirpyDatabase.GetOKResult(http.StatusCreated, createResponse)
+	respondWithJSON(w, result)
 }
 
-func usersGetEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-  userID, err := strconv.Atoi(request.PathValue("userID"))
-  if err != nil {
-    respondWithError(w, http.StatusBadRequest, "Invalid input")
-    return
-  }
+func endpointUpdateUserLogin(w http.ResponseWriter, r *http.Request, config apiConfig) {
+	requestToken := r.Header.Get("Authorization")
+	splitToken := strings.Fields(requestToken)
+	requestToken = splitToken[1]
 
-  user, error := config.UserDatabase.GetUser(userID)
+	result := Auth.ValidateJWT(requestToken, config.jwtSecret)
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
 
-  if error.Err != nil {
-    fmt.Println(error.Msg, error.Code)
-    respondWithError(w, error.Code, error.Msg)
-    return
-  }
- 
-  respondWithJSON(w, http.StatusOK, user)
+	subject := (*result.Body).(string)
+	userID, _ := strconv.Atoi(subject)
+
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	result = decodeRequestBody(r, &parameters{})
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
+
+	req := (*result.Body).(*parameters)
+
+	result = Auth.HashPassword(req.Password)
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
+
+	hashedPassword := (*result.Body).(string)
+
+	result = config.Database.UpdateUserLogin(userID, req.Email, hashedPassword)
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
+
+	user := (*result.Body).(ChirpyDatabase.User)
+
+	updateResponse := struct {
+		Id    int    `json:"id"`
+		Email string `json:"email"`
+	}{
+		Id:    user.Id,
+		Email: user.Email,
+	}
+
+	result = ChirpyDatabase.GetOKResult(http.StatusOK, updateResponse)
+	respondWithJSON(w, result)
 }
 
-func usersGetAllEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-  users, error := config.UserDatabase.GetUsers()
+func endpointGetUser(w http.ResponseWriter, r *http.Request, config apiConfig) {
+	userID, err := strconv.Atoi(r.PathValue("userID"))
+	if err != nil {
+		error := ChirpyDatabase.GetErrorResult(http.StatusInternalServerError, err)
+		respondWithError(w, error)
+		return
+	}
 
-  if error.Err != nil {
-    fmt.Println(error.Msg, error.Code)
-    respondWithError(w, error.Code, error.Msg)
-    return
-  }
+	result := config.Database.GetUser(userID)
 
-  respondWithJSON(w, http.StatusOK, users)
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
+
+	respondWithJSON(w, result)
 }
 
-func usersUpdateEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-  header := request.Header.Get("Authorization")
-  headers := strings.Fields(header)
-  tokenString := headers[1]
-  
-	decoder := json.NewDecoder(request.Body)
-	req := ChirpyDatabase.UserRequest{}
-	err := decoder.Decode(&req)
+func endpointGetAllUsers(w http.ResponseWriter, r *http.Request, config apiConfig) {
+	result := config.Database.GetAllUsers()
 
-  claims := jwt.RegisteredClaims{}
-  token, err := jwt.ParseWithClaims(
-    tokenString,
-    &claims,
-    func(token *jwt.Token) (interface{}, error) { return []byte(config.jwtSecret), nil},
-    )
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
 
-  if err != nil {
-    respondWithError(w, http.StatusUnauthorized, err.Error())
-    return
-  }
-
-  if !token.Valid {
-    respondWithError(w, http.StatusUnauthorized, err.Error())
-    return
-  }
-
-  userID, _ := strconv.Atoi(claims.Subject)
-
-  userRequest := ChirpyDatabase.UpdateUserRequest {
-    Id: userID,
-    Email: req.Email,
-    Password: req.Password,
-  }
-
-  error := config.UserDatabase.UpdateUser(userRequest)
-  if error.Err != nil {
-    fmt.Println(error.Err)
-    respondWithError(w, error.Code, error.Msg)
-    return
-  }
-
-  res := ChirpyDatabase.UserResponse {
-    Id: userID,
-    Email: req.Email,
-  }
-
-  respondWithJSON(w, http.StatusOK, res)
+	respondWithJSON(w, result)
 }

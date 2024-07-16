@@ -15,7 +15,14 @@ func main() {
   godotenv.Load()
   config.jwtSecret = os.Getenv("JWT_SECRET")
   
-  createDatabases()
+  result := ChirpyDatabase.NewDB("database.json")
+  if result.Error != nil {
+    return
+  }
+
+  database := (*result.Body).(ChirpyDatabase.Database)
+  config.Database = database
+
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", config.middlewareMetrics(http.StripPrefix("/app/", http.FileServer(http.Dir("./app")))))
 
@@ -32,8 +39,7 @@ func main() {
 
 type apiConfig struct {
 	pageVisits    int
-	ChirpDatabase ChirpyDatabase.Database
-	UserDatabase  ChirpyDatabase.Database
+	Database  ChirpyDatabase.Database
 	jwtSecret     string
 }
 
@@ -69,44 +75,44 @@ func getEndpoints() []httpEndpoint {
 			method:    "POST",
 			namespace: "/api",
 			route:     "/chirps",
-			callback:  chirpsCreateEndpoint,
+			callback:  endpointCreateChirp,
 		},
 		{
 			method:    "GET",
 			namespace: "/api",
 			route:     "/chirps/{chirpID}",
-			callback:  chirpsGetEndpoint,
+			callback:  endpointGetChirp,
 		},
 		{
 			method:    "GET",
 			namespace: "/api",
 			route:     "/chirps",
-			callback:  chirpsGetAllEndpoint,
+			callback:  endpointGetAllChirps,
 		},
 		// Users endpoints
 		{
 			method:    "POST",
 			namespace: "/api",
 			route:     "/users",
-			callback:  usersCreateEndpoint,
+			callback:  endpointCreateUser,
 		},
 		{
 			method:    "GET",
 			namespace: "/api",
 			route:     "/users/{userID}",
-			callback:  usersGetEndpoint,
+			callback:  endpointGetUser,
 		},
 		{
 			method:    "GET",
 			namespace: "/api",
 			route:     "/users",
-			callback:  usersGetAllEndpoint,
+			callback:  endpointGetAllUsers,
 		},
 		{
 			method:    "PUT",
 			namespace: "/api",
 			route:     "/users",
-			callback:  usersUpdateEndpoint,
+			callback:  endpointUpdateUserLogin,
 		},
 		// Login endpoints
 		{
@@ -139,21 +145,4 @@ func (config *apiConfig) middlewareMetrics(next http.Handler) http.Handler {
 
 func (config *apiConfig) resetVisits() {
 	config.pageVisits = 0
-}
-
-func createDatabases() {
-	chirpDatabse, err := ChirpyDatabase.NewDatabase("chirp_database.json")
-	if err != nil {
-		fmt.Printf("Failed to create Chirp database\n")
-		return
-	}
-
-	userDatabase, err := ChirpyDatabase.NewDatabase("user_database.json")
-	if err != nil {
-		fmt.Printf("Failed to create User database\n")
-		return
-	}
-
-	config.ChirpDatabase = *chirpDatabse
-	config.UserDatabase = *userDatabase
 }

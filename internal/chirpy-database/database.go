@@ -64,10 +64,15 @@ func (db *Database) LoadDB() Result {
 		return GetErrorResult(http.StatusInternalServerError, err)
 	}
 
-  structure := DatabaseStructure{}
+  structure := DatabaseStructure{
+    Users: map[int]User{},
+    Chirps: map[int]Chirp{},
+  }
 	err = json.Unmarshal(file, &structure)
 	if err != nil {
-		return GetErrorResult(http.StatusInternalServerError, err)
+    if err.Error() != "unexpected end of JSON input" {
+		  return GetErrorResult(http.StatusInternalServerError, err)
+    }
 	}
 
   return GetOKResult(1, structure)

@@ -6,7 +6,6 @@ import (
 	"net/http"
 )
 
-
 type User struct {
 	Id             int    `json:"id"`
 	Email          string `json:"email"`
@@ -17,7 +16,7 @@ type User struct {
 func (db *Database) CreateUser(email, hashedPassword string) Result {
   result := db.GetUserByEmail(email)
   if result.Body != nil {
-    msg := fmt.Sprintf("User with email\"%v\" already exists", email)
+    msg := fmt.Sprintf("Email \"%v\" already in use", email)
     return GetErrorResult(http.StatusConflict, errors.New(msg))
   }
 
@@ -29,11 +28,38 @@ func (db *Database) CreateUser(email, hashedPassword string) Result {
 	structure := (*result.Body).(DatabaseStructure)
 
   user := User {
-    Id: len(structure.Users),
+    Id: len(structure.Users) + 1,
     Email: email,
     HashedPassword: hashedPassword,
   }
 
+  structure.Users[user.Id] = user
+
+  result = db.WriteDB(structure)
+  if result.Error != nil {
+    return result
+  }
+
+  return GetOKResult(http.StatusCreated, user)
+}
+
+
+func (db *Database) UpdateUserLogin(userID int, email, hashedPassword string) Result {
+  result := db.GetUser(userID)
+  if result.Error != nil {
+    return result
+  }
+
+  user := (*result.Body).(User)
+  user.HashedPassword = hashedPassword
+  user.Email = email
+
+  result = db.LoadDB()
+  if result.Error != nil {
+    return result
+  }
+
+	structure := (*result.Body).(DatabaseStructure)
   structure.Users[user.Id] = user
 
   result = db.WriteDB(structure)

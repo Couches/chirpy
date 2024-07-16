@@ -1,79 +1,63 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
 	ChirpyDatabase "github.com/Couches/chirpy-database"
 )
 
-func chirpsCreateEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-	decoder := json.NewDecoder(request.Body)
-	req := ChirpyDatabase.ChirpRequest{}
-	err := decoder.Decode(&req)
 
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong while decoding request")
-		return
-	}
+func endpointCreateChirp(w http.ResponseWriter, r *http.Request, config apiConfig) {
+  type parameters struct {
+    Body string `json:"body"`
+  }
 
-  chirp, error := config.ChirpDatabase.CreateChirp(req)
-  if error.Err != nil {
-    fmt.Print(error.Msg, error.Code)
-    respondWithError(w, error.Code, error.Msg)
+  result := decodeRequestBody(r, &parameters{})
+  if result.Error != nil {
+    respondWithError(w, result)
     return
   }
 
-	respondWithJSON(w, http.StatusCreated, chirp)
+  req := (*result.Body).(*parameters)
+
+  result = config.Database.CreateChirp(req.Body)
+
+  if result.Error != nil {
+    respondWithError(w, result)
+    return
+  }
+
+  respondWithJSON(w, result)
 }
 
-func chirpsGetEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-  chirpID, err := strconv.Atoi(request.PathValue("chirpID"))
+
+func endpointGetChirp(w http.ResponseWriter, r *http.Request, config apiConfig) {
+  chirpID, err := strconv.Atoi(r.PathValue("chirpID"))
   if err != nil {
-    respondWithError(w, http.StatusBadRequest, "Invalid input")
+    error := ChirpyDatabase.GetErrorResult(http.StatusInternalServerError, err)
+    respondWithError(w, error)
     return
   }
 
-  chirp, error := config.ChirpDatabase.GetChirp(chirpID)
+  result := config.Database.GetChirp(chirpID)
 
-  if error.Err != nil {
-    fmt.Println(error.Msg, error.Code)
-    respondWithError(w, error.Code, error.Msg)
+  if result.Error != nil {
+    respondWithError(w, result)
     return
   }
-
-  respondWithJSON(w, http.StatusOK, chirp)
+  
+  respondWithJSON(w, result)
 }
 
-func chirpsGetAllEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-  chirps, error := config.ChirpDatabase.GetChirps()
 
-  if error.Err != nil {
-    fmt.Println(error.Msg, error.Code)
-    respondWithError(w, error.Code, error.Msg)
-    return
-  }
+func endpointGetAllChirps(w http.ResponseWriter, _ *http.Request, config apiConfig) {
+  result := config.Database.GetAllChirps()
 
-  respondWithJSON(w, http.StatusOK, chirps)
-}
-
-func respondWithError(w http.ResponseWriter, code int, msg string) {
-	http.Error(w, msg, code)
-}
-
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	res, err := json.Marshal(payload)
-
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+	if result.Error != nil {
+    respondWithError(w, result)
 		return
 	}
-  
 
-	w.Header().Add("Content-Type", "text/json; charset=utf-8")
-	w.WriteHeader(code)
-	w.Write(res)
+  respondWithJSON(w, result)
 }
-

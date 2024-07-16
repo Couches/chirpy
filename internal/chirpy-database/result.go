@@ -7,10 +7,9 @@ type Result struct {
 }
 
 func GetErrorResult(code int, err error) Result {
-  errMsg := any(err.Error())
 	return Result {
 		Code: code,
-    Body: &errMsg,
+    Body: nil,
 		Error:  err,
 	}
 }
