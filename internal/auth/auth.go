@@ -2,7 +2,6 @@ package Auth
 
 import (
 	"errors"
-	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -70,14 +69,7 @@ func ValidateJWT(tokenString, tokenSecret string) ChirpyDatabase.Result {
 }
 
 
-func CreateJWT(userID int, tokenSecret string, expiresInSeconds int) ChirpyDatabase.Result {
-  if expiresInSeconds <= 0 {
-    expiresInSeconds = 86400
-  }
-  expiresInSeconds = int(math.Min(float64(expiresInSeconds), 86400))
-
-  expiresIn := time.Duration(expiresInSeconds * int(time.Second))
-
+func CreateJWT(userID int, tokenSecret string, expiresIn time.Duration) ChirpyDatabase.Result {
   claims := jwt.RegisteredClaims {
     Issuer: "chirpy",
     IssuedAt: jwt.NewNumericDate(time.Now().UTC()),

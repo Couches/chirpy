@@ -10,10 +10,11 @@ type Chirp struct {
 	Id    int    `json:"id"`
 	Valid bool   `json:"valid"`
 	Body  string `json:"body"`
+  AuthorID int `json:"author_id"`
 }
 
 
-func (db *Database) CreateChirp(body string) Result {
+func (db *Database) CreateChirp(body string, authorID int) Result {
   result := db.LoadDB()
 	if result.Error != nil {
 		return result
@@ -22,9 +23,12 @@ func (db *Database) CreateChirp(body string) Result {
 	structure := (*result.Body).(DatabaseStructure)
 
   chirp := Chirp {
-    Id: len(structure.Chirps) + 1,
+    Id: *db.nextChirpID,
     Body: body,
+    AuthorID: authorID,
   }
+
+  fmt.Println(chirp)
 
 	structure.Chirps[chirp.Id] = chirp
 
@@ -33,9 +37,39 @@ func (db *Database) CreateChirp(body string) Result {
 		return result
 	}
 
+  *db.nextChirpID++
+
 	return GetOKResult(http.StatusCreated, chirp)
 }
 
+func (db *Database) DeleteChirp(chirpID, userID int) Result {
+  result := db.LoadDB()
+  if result.Error != nil {
+    return result
+  }
+
+  structure := (*result.Body).(DatabaseStructure)
+
+  if _, ok := structure.Chirps[chirpID]; !ok {
+    msg := fmt.Sprintf("No chirp found with id \"%v\"", chirpID)
+    return GetErrorResult(http.StatusUnauthorized, errors.New(msg))
+  }
+
+  chirp := structure.Chirps[chirpID]
+  if chirp.AuthorID != userID {
+    msg := fmt.Sprintf("Cannot delete others' chirps")
+    return GetErrorResult(http.StatusForbidden, errors.New(msg))
+  }
+  
+  delete(structure.Chirps, chirpID)
+
+  result = db.WriteDB(structure)
+  if result.Error != nil {
+    return result
+  }
+
+  return GetOKResult(http.StatusNoContent, nil)
+}
 
 func (db *Database) GetChirp(id int) Result {
 	result := db.GetAllChirps()

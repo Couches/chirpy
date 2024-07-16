@@ -41,11 +41,13 @@ func endpointCreateUser(w http.ResponseWriter, r *http.Request, config apiConfig
 	user := (*result.Body).(ChirpyDatabase.User)
 
 	createResponse := struct {
-		Id    int    `json:"id"`
-		Email string `json:"email"`
+		Id          int    `json:"id"`
+		Email       string `json:"email"`
+		IsChirpyRed bool   `json:"is_chirpy_red"`
 	}{
-		Id:    user.Id,
-		Email: user.Email,
+		Id:          user.Id,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	result = ChirpyDatabase.GetOKResult(http.StatusCreated, createResponse)
@@ -96,11 +98,13 @@ func endpointUpdateUserLogin(w http.ResponseWriter, r *http.Request, config apiC
 	user := (*result.Body).(ChirpyDatabase.User)
 
 	updateResponse := struct {
-		Id    int    `json:"id"`
-		Email string `json:"email"`
+		Id          int    `json:"id"`
+		Email       string `json:"email"`
+		IsChirpyRed bool   `json:"is_chirpy_red"`
 	}{
-		Id:    user.Id,
-		Email: user.Email,
+		Id:          user.Id,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	result = ChirpyDatabase.GetOKResult(http.StatusOK, updateResponse)
@@ -134,4 +138,34 @@ func endpointGetAllUsers(w http.ResponseWriter, r *http.Request, config apiConfi
 	}
 
 	respondWithJSON(w, result)
+}
+
+func upgradeUserEndpoint(w http.ResponseWriter, r *http.Request, config apiConfig) {
+	type parameters struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID int `json:"user_id"`
+		} `json:"data"`
+	}
+
+  result := decodeRequestBody(r, &parameters{})
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
+	}
+
+	req := (*result.Body).(*parameters)
+
+  if req.Event != "user.upgraded" {
+    respondWithJSON(w, ChirpyDatabase.GetOKResult(http.StatusNoContent, nil))
+    return
+  }
+
+  result = config.Database.UpgradeUser(req.Data.UserID)
+  if result.Error != nil {
+    respondWithError(w, result)
+    return
+  }
+
+  respondWithJSON(w, result)
 }

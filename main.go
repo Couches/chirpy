@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	ChirpyDatabase "github.com/Couches/chirpy-database"
-  "github.com/joho/godotenv"  
+	"github.com/joho/godotenv"
 )
 
 var config apiConfig = apiConfig{}
@@ -14,7 +15,8 @@ var config apiConfig = apiConfig{}
 func main() {
   godotenv.Load()
   config.jwtSecret = os.Getenv("JWT_SECRET")
-  
+  config.jwtExpireTime = 1 * time.Hour
+
   result := ChirpyDatabase.NewDB("database.json")
   if result.Error != nil {
     return
@@ -41,6 +43,7 @@ type apiConfig struct {
 	pageVisits    int
 	Database  ChirpyDatabase.Database
 	jwtSecret     string
+  jwtExpireTime time.Duration
 }
 
 type httpEndpoint struct {
@@ -89,6 +92,12 @@ func getEndpoints() []httpEndpoint {
 			route:     "/chirps",
 			callback:  endpointGetAllChirps,
 		},
+		{
+			method:    "DELETE",
+			namespace: "/api",
+			route:     "/chirps/{chirpID}",
+			callback:  endpointDeleteChirp,
+		},
 		// Users endpoints
 		{
 			method:    "POST",
@@ -120,6 +129,25 @@ func getEndpoints() []httpEndpoint {
 			namespace: "/api",
 			route:     "/login",
 			callback:  loginEndpoint,
+		},
+		{
+			method:    "POST",
+			namespace: "/api",
+			route:     "/refresh",
+			callback:  refreshEndpoint,
+		},
+		{
+			method:    "POST",
+			namespace: "/api",
+			route:     "/revoke",
+			callback:  revokeEndpoint,
+		},
+    // Payment endpoints
+		{
+			method:    "POST",
+			namespace: "/api",
+			route:     "/polka/webhooks",
+			callback:  upgradeUserEndpoint,
 		},
 	}
 }
