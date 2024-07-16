@@ -1,77 +1,60 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
-	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
+	Auth "github.com/Couches/auth"
+	ChirpyDatabase "github.com/Couches/chirpy-database"
 )
 
-type LoginRequest struct {
-	Email      string `json:"email"`
-	Password   string `json:"password"`
-	ExpireTime int    `json:"expires_in_seconds,omitempty"`
-}
-
-type LoginResponse struct {
-	Id    int    `json:"id"`
-	Email string `json:"email"`
-	Token string `json:"token"`
-}
-
-func loginEndpoint(w http.ResponseWriter, request *http.Request, config apiConfig) {
-	decoder := json.NewDecoder(request.Body)
-	req := LoginRequest{}
-	err := decoder.Decode(&req)
-
-	expiresIn := time.Duration(req.ExpireTime) * time.Second
-	if expiresIn == 0 || expiresIn > 24*time.Hour {
-		expiresIn = 24 * time.Hour
+func loginEndpoint(w http.ResponseWriter, r *http.Request, config apiConfig) {
+	type parameters struct {
+		Email      string `json:"email"`
+		Password   string `json:"password"`
+		ExpireTime int    `json:"expires_in_seconds,omitempty"`
 	}
 
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong while decoding request")
+	result := decodeRequestBody(r, &parameters{})
+	if result.Error != nil {
+		respondWithError(w, result)
 		return
 	}
 
-	user, error := config.UserDatabase.GetUserByEmail(req.Email)
+	req := (*result.Body).(*parameters)
 
-	if error.Err != nil {
-		respondWithError(w, error.Code, error.Msg)
+	result = config.Database.GetUserByEmail(req.Email)
+
+	if result.Error != nil {
+		respondWithError(w, result)
 		return
 	}
 
-	expiresAt := time.Now().Add(expiresIn)
+	user := (*result.Body).(ChirpyDatabase.User)
 
-	claims := jwt.RegisteredClaims{
-		Issuer:    "chirpy",
-		IssuedAt:  jwt.NewNumericDate(time.Now()),
-		ExpiresAt: jwt.NewNumericDate(expiresAt),
-		Subject:   strconv.Itoa(user.Id),
-	}
-
-	new_token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-  token, err := new_token.SignedString([]byte(config.jwtSecret))
-  if err != nil {
-    respondWithError(w, http.StatusInternalServerError, err.Error())
-    return
-  }
-
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, err.Error())
+	result = Auth.ComparePassword(req.Password, user.HashedPassword)
+	if result.Error != nil {
+		respondWithError(w, result)
 		return
 	}
 
-	loginResponse := LoginResponse{
-		Id: user.Id,
-    Email: user.Email,
-    Token: token,
+	result = Auth.CreateJWT(user.Id, config.jwtSecret, req.ExpireTime)
+	if result.Error != nil {
+		respondWithError(w, result)
+		return
 	}
 
-	respondWithJSON(w, http.StatusOK, loginResponse)
+	token := (*result.Body).(string)
+
+	loginResponse := struct {
+		Id    int    `json:"id"`
+		Email string `json:"email"`
+		Token string `json:"token"`
+	}{
+		Id:    user.Id,
+		Email: user.Email,
+		Token: token,
+	}
+
+	result = ChirpyDatabase.GetOKResult(http.StatusOK, loginResponse)
+	respondWithJSON(w, result)
 }
-

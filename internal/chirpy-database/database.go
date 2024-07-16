@@ -2,7 +2,7 @@ package ChirpyDatabase
 
 import (
 	"encoding/json"
-	"fmt"
+	"net/http"
 	"os"
 	"sync"
 )
@@ -12,90 +12,68 @@ type Database struct {
 	mux  *sync.RWMutex
 }
 
-type DataEntity interface {
-	GetID() int
-	IsValid() bool
+type DatabaseStructure struct {
+	Chirps map[int]Chirp
+	Users  map[int]User
 }
 
-type DBStructure[T any] struct {
-	Data map[int]T `json:"data"`
-}
-
-type CustomError struct {
-	Err  error
-	Code int
-	Msg  string
-}
-
-func NewDatabase(path string) (*Database, error) {
-	db := &Database{}
+func NewDB(path string) Result {
 	file, err := os.Create(path)
 	if err != nil {
-		fmt.Printf("Failed to create file \"%v\": %v\n", path, err)
-		return db, err
+		return GetErrorResult(http.StatusInternalServerError, err)
 	}
 
 	defer file.Close()
 
-	db = &Database{
+  db := &Database{
 		path: path,
 		mux:  &sync.RWMutex{},
 	}
 
-	return db, nil
+  return GetOKResult(1, *db)
 }
 
-func (db *Database) writeDB(dbs any) error {
-  fmt.Println(dbs)
+
+
+func (db *Database) WriteDB(structure DatabaseStructure) Result {
 	file, err := os.Create(db.path)
-	defer file.Close()
-
 	if err != nil {
-		fmt.Printf("Failed to create or truncate file \"%v\"\n", db.path)
-		return err
+		return GetErrorResult(http.StatusInternalServerError, err)
 	}
 
-	body, err := json.Marshal(dbs)
+  defer file.Close()
+
+	body, err := json.Marshal(structure)
 	if err != nil {
-		fmt.Printf("Failed to serialize data to JSON for writing\n")
-		return err
+		return GetErrorResult(http.StatusInternalServerError, err)
 	}
 
-	written, err := file.Write(body)
+	numWritten, err := file.Write(body)
 	if err != nil {
-		fmt.Printf("Failed to write to file \"%v\"\n", db.path)
-		return err
+		return GetErrorResult(http.StatusInternalServerError, err)
 	}
 
-	fmt.Printf("Successfully wrote %v bytes to file \"%v\"\n", written, db.path)
-	return nil
+	return GetOKResult(1, numWritten)
 }
 
-func (db *Database) loadDB() (DBStructure[DataEntity], error) {
-	dbs := DBStructure[DataEntity]{
-		Data: map[int]DataEntity{},
-	}
+
+
+func (db *Database) LoadDB() Result {
 	file, err := os.ReadFile(db.path)
 	if err != nil {
-		fmt.Printf("Failed to read file \"%v\"\n", db.path)
-		return dbs, err
+		return GetErrorResult(http.StatusInternalServerError, err)
 	}
 
-	fmt.Println(string(file))
-	err = json.Unmarshal(file, &dbs)
-
+  structure := DatabaseStructure{
+    Users: map[int]User{},
+    Chirps: map[int]Chirp{},
+  }
+	err = json.Unmarshal(file, &structure)
 	if err != nil {
-		fmt.Printf("Failed to deserialize JSON from file \"%v\" with err %v\n", db.path, err)
-		return dbs, err
+    if err.Error() != "unexpected end of JSON input" {
+		  return GetErrorResult(http.StatusInternalServerError, err)
+    }
 	}
 
-	return dbs, nil
-}
-
-func getError(msg string, code int, err error) CustomError {
-	return CustomError{
-		Msg:  msg,
-		Code: code,
-		Err:  err,
-	}
+  return GetOKResult(1, structure)
 }
