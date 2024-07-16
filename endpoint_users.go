@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -141,6 +142,21 @@ func endpointGetAllUsers(w http.ResponseWriter, r *http.Request, config apiConfi
 }
 
 func upgradeUserEndpoint(w http.ResponseWriter, r *http.Request, config apiConfig) {
+	apiKey := r.Header.Get("Authorization")
+	splitToken := strings.Fields(apiKey)
+
+  if len(splitToken) < 2 {
+    respondWithError(w, ChirpyDatabase.GetErrorResult(http.StatusUnauthorized, errors.New("Unauthorized")))
+    return
+  }
+
+	apiKey = splitToken[1]
+
+  if apiKey != config.apiKey {
+    respondWithError(w, ChirpyDatabase.GetErrorResult(http.StatusUnauthorized, errors.New("Unauthorized")))
+    return
+  }
+
 	type parameters struct {
 		Event string `json:"event"`
 		Data  struct {

@@ -13,17 +13,18 @@ import (
 var config apiConfig = apiConfig{}
 
 func main() {
-  godotenv.Load()
-  config.jwtSecret = os.Getenv("JWT_SECRET")
-  config.jwtExpireTime = 1 * time.Hour
+	godotenv.Load()
+	config.jwtSecret = os.Getenv("JWT_SECRET")
+  config.apiKey = os.Getenv("API_KEY")
+	config.jwtExpireTime = 1 * time.Hour
 
-  result := ChirpyDatabase.NewDB("database.json")
-  if result.Error != nil {
-    return
-  }
+	result := ChirpyDatabase.NewDB("database.json")
+	if result.Error != nil {
+		return
+	}
 
-  database := (*result.Body).(ChirpyDatabase.Database)
-  config.Database = database
+	database := (*result.Body).(ChirpyDatabase.Database)
+	config.Database = database
 
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", config.middlewareMetrics(http.StripPrefix("/app/", http.FileServer(http.Dir("./app")))))
@@ -41,9 +42,10 @@ func main() {
 
 type apiConfig struct {
 	pageVisits    int
-	Database  ChirpyDatabase.Database
+	Database      ChirpyDatabase.Database
 	jwtSecret     string
-  jwtExpireTime time.Duration
+	jwtExpireTime time.Duration
+	apiKey        string
 }
 
 type httpEndpoint struct {
@@ -142,7 +144,7 @@ func getEndpoints() []httpEndpoint {
 			route:     "/revoke",
 			callback:  revokeEndpoint,
 		},
-    // Payment endpoints
+		// Payment endpoints
 		{
 			method:    "POST",
 			namespace: "/api",
