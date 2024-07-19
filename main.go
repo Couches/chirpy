@@ -92,7 +92,7 @@ func getEndpoints() []httpEndpoint {
 			method:    "GET",
 			namespace: "/api",
 			route:     "/chirps",
-			callback:  endpointGetAllChirps,
+			callback:  endpointGetChirps,
 		},
 		{
 			method:    "DELETE",
